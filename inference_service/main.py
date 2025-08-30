@@ -3,39 +3,39 @@ from typing import Any, Dict, List
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-from .vector_store import InMemoryVectorStore, SimpleTextEmbedder
+from .vector_store import VectorIndex, CharProjectionEmbedder
 
 
-class IndexRequest(BaseModel):
+class AddDocRequest(BaseModel):
     id: str = Field(..., description="Unique document ID")
     text: str = Field(..., description="Raw text to index")
     metadata: Dict[str, Any] | None = Field(default=None, description="Optional metadata")
 
 
-class SearchRequest(BaseModel):
+class QueryRequest(BaseModel):
     query: str = Field(..., description="Search query text")
     top_k: int = Field(default=5, ge=1, le=50, description="Number of results")
 
 
-class SearchHit(BaseModel):
+class ResultHit(BaseModel):
     id: str
     score: float
     metadata: Dict[str, Any]
 
 
-class SearchResponse(BaseModel):
-    hits: List[SearchHit]
+class QueryResponse(BaseModel):
+    hits: List[ResultHit]
 
 
 app = FastAPI(title="denifiles Inference + Vector Search Service")
 
 
-_embedder = SimpleTextEmbedder(dim=128)
-_store = InMemoryVectorStore(embedder=_embedder)
+_enc = CharProjectionEmbedder(output_dim=128)
+_idx = VectorIndex(embedder=_enc)
 
 
 @app.get("/healthz")
-def healthz() -> Dict[str, str]:
+def health_check() -> Dict[str, str]:
     """
     Simple health check endpoint.
 
@@ -46,32 +46,31 @@ def healthz() -> Dict[str, str]:
 
 
 @app.post("/index")
-def index_document(body: IndexRequest) -> Dict[str, Any]:
+def add_document(req: AddDocRequest) -> Dict[str, Any]:
     """
     Index a single document into the vector store.
 
-    In a Triton‑backed setup:
+    In a Triton-backed setup:
     - The text would be sent to a Triton (TensorRT) model to obtain an embedding.
     - The resulting embedding would be stored in a vector database (FAISS/HNSW, etc.).
     """
-    _store.index(doc_id=body.id, text=body.text, metadata=body.metadata or {})
-    return {"status": "indexed", "id": body.id}
+    _idx.add(doc_id=req.id, text=req.text, attrs=req.metadata or {})
+    return {"status": "indexed", "id": req.id}
 
 
-@app.post("/search", response_model=SearchResponse)
-def search(body: SearchRequest) -> SearchResponse:
+@app.post("/search", response_model=QueryResponse)
+def run_search(req: QueryRequest) -> QueryResponse:
     """
     Perform a simple semantic search using cosine similarity.
     """
-    results = _store.search(query=body.query, top_k=body.top_k)
-    hits: List[SearchHit] = []
-    for stored, score in results:
+    matches = _idx.query(text=req.query, top_k=req.top_k)
+    hits: List[ResultHit] = []
+    for entry, relevance in matches:
         hits.append(
-            SearchHit(
-                id=stored.doc_id,
-                score=score,
-                metadata=stored.metadata,
+            ResultHit(
+                id=entry.doc_id,
+                score=relevance,
+                metadata=entry.attrs,
             )
         )
-    return SearchResponse(hits=hits)
-
+    return QueryResponse(hits=hits)

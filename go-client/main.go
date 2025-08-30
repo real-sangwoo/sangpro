@@ -8,19 +8,19 @@ import (
 	"os"
 )
 
-type searchRequest struct {
-	Query string `json:"query"`
-	TopK  int    `json:"top_k"`
+type queryPayload struct {
+	Text  string `json:"query"`
+	Limit int    `json:"top_k"`
 }
 
-type searchHit struct {
-	ID       string                 `json:"id"`
-	Score    float64                `json:"score"`
-	Metadata map[string]interface{} `json:"metadata"`
+type resultItem struct {
+	DocumentID string                 `json:"id"`
+	Relevance  float64                `json:"score"`
+	Attrs      map[string]interface{} `json:"metadata"`
 }
 
-type searchResponse struct {
-	Hits []searchHit `json:"hits"`
+type queryResult struct {
+	Items []resultItem `json:"hits"`
 }
 
 func main() {
@@ -29,39 +29,38 @@ func main() {
 		os.Exit(1)
 	}
 
-	query := os.Args[1]
+	userQuery := os.Args[1]
 
-	reqBody := searchRequest{
-		Query: query,
-		TopK:  5,
+	payload := queryPayload{
+		Text:  userQuery,
+		Limit: 5,
 	}
 
-	buf, err := json.Marshal(reqBody)
-	if err != nil {
-		fmt.Println("failed to marshal request:", err)
+	encoded, encErr := json.Marshal(payload)
+	if encErr != nil {
+		fmt.Println("failed to marshal request:", encErr)
 		os.Exit(1)
 	}
 
-	resp, err := http.Post("http://localhost:8000/search", "application/json", bytes.NewReader(buf))
-	if err != nil {
-		fmt.Println("request error:", err)
+	httpResp, httpErr := http.Post("http://localhost:8000/search", "application/json", bytes.NewReader(encoded))
+	if httpErr != nil {
+		fmt.Println("request error:", httpErr)
 		os.Exit(1)
 	}
-	defer resp.Body.Close()
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		fmt.Println("unexpected status:", resp.Status)
-		os.Exit(1)
-	}
-
-	var sr searchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
-		fmt.Println("decode error:", err)
+	if httpResp.StatusCode != http.StatusOK {
+		fmt.Println("unexpected status:", httpResp.Status)
 		os.Exit(1)
 	}
 
-	for i, hit := range sr.Hits {
-		fmt.Printf("%d. id=%s score=%.4f metadata=%v\n", i+1, hit.ID, hit.Score, hit.Metadata)
+	var parsed queryResult
+	if decErr := json.NewDecoder(httpResp.Body).Decode(&parsed); decErr != nil {
+		fmt.Println("decode error:", decErr)
+		os.Exit(1)
+	}
+
+	for n, item := range parsed.Items {
+		fmt.Printf("%d. id=%s score=%.4f metadata=%v\n", n+1, item.DocumentID, item.Relevance, item.Attrs)
 	}
 }
-

@@ -6,13 +6,13 @@ import numpy as np
 
 
 @dataclass
-class StoredVector:
+class VectorEntry:
     doc_id: str
-    vector: np.ndarray
-    metadata: Dict[str, Any]
+    embedding: np.ndarray
+    attrs: Dict[str, Any]
 
 
-class SimpleTextEmbedder:
+class CharProjectionEmbedder:
     """
     Lightweight, deterministic text -> vector mapping.
 
@@ -22,27 +22,27 @@ class SimpleTextEmbedder:
       swapped for a call to a Triton Inference Server.
     """
 
-    def __init__(self, dim: int = 128, seed: int = 42) -> None:
-        self.dim = dim
-        rng = np.random.default_rng(seed)
+    def __init__(self, output_dim: int = 128, rand_seed: int = 42) -> None:
+        self.output_dim = output_dim
+        rng = np.random.default_rng(rand_seed)
         # Random projection basis for ASCII characters.
-        self._char_basis = rng.normal(size=(128, dim)).astype(np.float32)
+        self._projection = rng.normal(size=(128, output_dim)).astype(np.float32)
 
-    def embed(self, text: str) -> np.ndarray:
-        if not text:
-            return np.zeros(self.dim, dtype=np.float32)
+    def embed(self, raw_text: str) -> np.ndarray:
+        if not raw_text:
+            return np.zeros(self.output_dim, dtype=np.float32)
 
-        vec = np.zeros(self.dim, dtype=np.float32)
-        for ch in text.lower():
-            idx = ord(ch)
-            if 0 <= idx < 128:
-                vec += self._char_basis[idx]
+        accumulator = np.zeros(self.output_dim, dtype=np.float32)
+        for char in raw_text.lower():
+            char_code = ord(char)
+            if 0 <= char_code < 128:
+                accumulator += self._projection[char_code]
 
-        norm = np.linalg.norm(vec) + 1e-8
-        return vec / norm
+        magnitude = np.linalg.norm(accumulator) + 1e-8
+        return accumulator / magnitude
 
 
-class InMemoryVectorStore:
+class VectorIndex:
     """
     In-memory vector store using cosine similarity.
 
@@ -50,39 +50,43 @@ class InMemoryVectorStore:
     - In production it can be replaced by FAISS, HNSW, Pinecone, etc.
     """
 
-    def __init__(self, embedder: SimpleTextEmbedder) -> None:
+    def __init__(self, embedder: CharProjectionEmbedder) -> None:
         self._embedder = embedder
-        self._vectors: List[StoredVector] = []
-        self._lock = threading.Lock()
+        self._entries: List[VectorEntry] = []
+        self._mu = threading.Lock()
 
-    def index(self, doc_id: str, text: str, metadata: Dict[str, Any] | None = None) -> None:
-        metadata = metadata or {}
+    def add(self, doc_id: str, text: str, attrs: Dict[str, Any] | None = None) -> None:
+        attrs = attrs or {}
         vec = self._embedder.embed(text)
-        stored = StoredVector(doc_id=doc_id, vector=vec, metadata=metadata)
-        with self._lock:
-            self._vectors.append(stored)
+        entry = VectorEntry(doc_id=doc_id, embedding=vec, attrs=attrs)
+        with self._mu:
+            self._entries.append(entry)
 
-    def search(self, query: str, top_k: int = 5) -> List[Tuple[StoredVector, float]]:
+    def query(self, text: str, top_k: int = 5) -> List[Tuple[VectorEntry, float]]:
         if top_k <= 0:
             return []
 
-        q_vec = self._embedder.embed(query)
-        if not self._vectors:
+        q_vec = self._embedder.embed(text)
+        if not self._entries:
             return []
 
-        with self._lock:
-            matrix = np.stack([v.vector for v in self._vectors], axis=0)
-            dots = matrix @ q_vec
-            matrix_norm = np.linalg.norm(matrix, axis=1) + 1e-8
+        with self._mu:
+            mat = np.stack([e.embedding for e in self._entries], axis=0)
+            dot_products = mat @ q_vec
+            row_norms = np.linalg.norm(mat, axis=1) + 1e-8
             q_norm = np.linalg.norm(q_vec) + 1e-8
-            scores = dots / (matrix_norm * q_norm)
+            cosine_scores = dot_products / (row_norms * q_norm)
 
-            top_k = min(top_k, len(self._vectors))
-            idx = np.argpartition(-scores, top_k - 1)[:top_k]
-            sorted_idx = idx[np.argsort(-scores[idx])]
+            k = min(top_k, len(self._entries))
+            top_indices = np.argpartition(-cosine_scores, k - 1)[:k]
+            ranked = top_indices[np.argsort(-cosine_scores[top_indices])]
 
-            results: List[Tuple[StoredVector, float]] = []
-            for i in sorted_idx:
-                results.append((self._vectors[int(i)], float(scores[int(i)])))
-            return results
+            output: List[Tuple[VectorEntry, float]] = []
+            for idx in ranked:
+                output.append((self._entries[int(idx)], float(cosine_scores[int(idx)])))
+            return output
 
+
+# Aliases kept for backward compatibility
+SimpleTextEmbedder = CharProjectionEmbedder
+InMemoryVectorStore = VectorIndex
