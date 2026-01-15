@@ -16,16 +16,16 @@ class SimpleTextEmbedder:
     """
     Lightweight, deterministic text -> vector mapping.
 
-    Ini bukan model ML beneran, tapi:
-    - Tidak butuh dependency berat (Torch, TensorRT, dll).
-    - Interface-nya mirip "embed(text) -> vector" supaya gampang diganti
-      jadi panggilan ke Triton Inference Server.
+    This is not a real ML model, but:
+    - It avoids heavy dependencies (Torch, TensorRT, etc.).
+    - It exposes an "embed(text) -> vector" interface that can easily be
+      swapped for a call to a Triton Inference Server.
     """
 
     def __init__(self, dim: int = 128, seed: int = 42) -> None:
         self.dim = dim
         rng = np.random.default_rng(seed)
-        # Random projection basis untuk huruf ASCII.
+        # Random projection basis for ASCII characters.
         self._char_basis = rng.normal(size=(128, dim)).astype(np.float32)
 
     def embed(self, text: str) -> np.ndarray:
@@ -44,10 +44,10 @@ class SimpleTextEmbedder:
 
 class InMemoryVectorStore:
     """
-    In-memory vector store dengan cosine similarity.
+    In-memory vector store using cosine similarity.
 
-    - Cocok sebagai prototipe.
-    - Di production bisa diganti ke FAISS, HNSW, Pinecone, dll.
+    - Suitable as a prototype.
+    - In production it can be replaced by FAISS, HNSW, Pinecone, etc.
     """
 
     def __init__(self, embedder: SimpleTextEmbedder) -> None:

@@ -37,10 +37,10 @@ _store = InMemoryVectorStore(embedder=_embedder)
 @app.get("/healthz")
 def healthz() -> Dict[str, str]:
     """
-    Simple healthcheck endpoint.
+    Simple health check endpoint.
 
-    Di environment production, health ini biasanya dipantau oleh
-    orchestration layer (Kubernetes, ECS, dsb).
+    In production this is typically monitored by an orchestration layer
+    such as Kubernetes or ECS.
     """
     return {"status": "ok"}
 
@@ -48,11 +48,11 @@ def healthz() -> Dict[str, str]:
 @app.post("/index")
 def index_document(body: IndexRequest) -> Dict[str, Any]:
     """
-    Index satu dokumen ke vector store.
+    Index a single document into the vector store.
 
-    Di setup yang terhubung Triton:
-    - Di sini text dikirim ke Triton model (TensorRT) untuk dapat embedding.
-    - Hasil embedding dimasukkan ke vector DB (FAISS/HNSW, dll).
+    In a Triton‑backed setup:
+    - The text would be sent to a Triton (TensorRT) model to obtain an embedding.
+    - The resulting embedding would be stored in a vector database (FAISS/HNSW, etc.).
     """
     _store.index(doc_id=body.id, text=body.text, metadata=body.metadata or {})
     return {"status": "indexed", "id": body.id}
@@ -61,7 +61,7 @@ def index_document(body: IndexRequest) -> Dict[str, Any]:
 @app.post("/search", response_model=SearchResponse)
 def search(body: SearchRequest) -> SearchResponse:
     """
-    Lakukan semantic-ish search dengan cosine similarity.
+    Perform a simple semantic search using cosine similarity.
     """
     results = _store.search(query=body.query, top_k=body.top_k)
     hits: List[SearchHit] = []

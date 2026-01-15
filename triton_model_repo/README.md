@@ -1,26 +1,26 @@
 Triton Model Repo Skeleton
 ==========================
 
-Ini bukan full Triton setup, tapi skeleton yang nunjukin gimana project ini
-bisa dihubungkan ke **NVIDIA Triton Inference Server** di environment beneran.
+This is not a full Triton setup, but a skeleton that shows how this project
+could be connected to **NVIDIA Triton Inference Server** in a real environment.
 
-### Layout yang umum
+### Typical layout
 
-Contoh layout minimal:
+A minimal example layout:
 
 ```text
 triton_model_repo/
   text_embedder/
     1/
-      model.onnx        # atau model.plan (TensorRT)
+      model.onnx        # or model.plan (TensorRT)
     config.pbtxt
 ```
 
-`config.pbtxt` kurang-lebih berisi:
+`config.pbtxt` would roughly contain:
 
 ```text
 name: "text_embedder"
-platform: "tensorrt_plan"  # atau "onnxruntime_onnx"
+platform: "tensorrt_plan"  # or "onnxruntime_onnx"
 max_batch_size: 32
 input [
   {
@@ -33,7 +33,7 @@ output [
   {
     name: "EMBEDDING"
     data_type: TYPE_FP32
-    dims: [ 768 ]  # contoh dim
+    dims: [ 768 ]  # example dimension
   }
 ]
 instance_group [
@@ -44,21 +44,21 @@ instance_group [
 ]
 ```
 
-### Menghubungkan ke service Python di project ini
+### Connecting to the Python service in this project
 
-Di `inference_service/main.py`, saat ini kita pakai `SimpleTextEmbedder`
-yang hashing‑based dan ringan. Di production, embedder itu bisa diganti jadi:
+In `inference_service/main.py` the code currently uses `SimpleTextEmbedder`,
+which is hash‑based and lightweight. In production this embedder can be replaced with:
 
-- Client HTTP/gRPC ke Triton:
-  - Kirim input text (tokenized / serialized) ke model `text_embedder`.
-  - Ambil output `EMBEDDING` (vector float32).
-- Vector yang keluar kemudian disimpan ke vector store (FAISS / HNSW, dll),
-  sementara demo ini masih pakai `InMemoryVectorStore`.
+- An HTTP/gRPC client to Triton:
+  - Send input text (tokenized / serialized) to the `text_embedder` model.
+  - Read the `EMBEDDING` output (float32 vector).
+- The resulting vector is then stored in a vector store (FAISS / HNSW, etc.),
+  while this demo still uses `InMemoryVectorStore`.
 
-Dengan pendekatan ini, kamu bisa tunjukkan:
+With this approach you can demonstrate:
 
-- Paham struktur **Triton model repository**.
-- Paham pemisahan concern:
+- Understanding of **Triton model repository** structure.
+- Understanding of clear separation of concerns:
   - Triton: heavy model serving (TensorRT, GPU).
-  - Python service: routing, healthcheck, vector DB orchestration.
+  - Python service: routing, health checks, vector DB orchestration.
 

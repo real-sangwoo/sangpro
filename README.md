@@ -1,42 +1,40 @@
 denifiles – Vector Search Inference Service
 ===========================================
 
-**Bahasa campur Indo/English biar enak dibaca.**
+This repository is a compact demo project that is relevant to a **ML Engineer @ TwelveLabs**–style role:
 
-Project ini contoh kecil yang relevan dengan role **ML Engineer @ TwelveLabs**:
+- **AI inference infrastructure mindset**: a small microservice for inference + vector search.
+- **Vector Search**: in‑memory vector index with cosine similarity.
+- **Python**: backend using `FastAPI`.
+- **Go**: small CLI client to query the service.
+- **Triton/TensorRT oriented**: the embedding layer is designed so it can be swapped with a real NVIDIA Triton / TensorRT model server.
 
-- **AI inference infra mindset**: simple microservice untuk inference + vector search.
-- **Vector Search**: in‑memory vector index dengan cosine similarity.
-- **Python**: backend pakai `FastAPI`.
-- **Go**: small CLI client buat query service.
-- **Triton/TensorRT oriented**: desain embedding layer seakan‑akan di‑serve via NVIDIA Triton (di sini masih stub, gampang diganti ke Triton/TensorRT beneran).
-
-### Arsitektur Singkat
+### High‑level architecture
 
 - **`inference_service/` (Python, FastAPI)**  
-  - Endpoint `POST /index` untuk menambahkan dokumen (text) ke vector store.  
-  - Endpoint `POST /search` untuk semantic search sederhana.  
-  - Endpoint `GET /healthz` untuk health check (tipikal di infra production).
+  - `POST /index` to add text documents into the vector store.  
+  - `POST /search` for simple semantic search.  
+  - `GET /healthz` for a production‑style health check endpoint.
 - **`go-client/` (Go)**  
-  - CLI buat kirim query ke `/search` dan print hasil.
+  - CLI that sends search queries to `/search` and prints results.
 - **`triton_model_repo/`**  
-  - Skeleton + catatan gimana service ini bisa diintegrasikan dengan **NVIDIA Triton Inference Server** dan model TensorRT beneran.
+  - Skeleton + notes for how this service could be wired into **NVIDIA Triton Inference Server** and TensorRT models.
 
 ### Quickstart (Python service)
 
-1. **Install dependency** (idealnya di virtualenv):
+1. **Install dependencies** (ideally in a virtualenv):
 
    ```bash
    pip install -r requirements.txt
    ```
 
-2. **Jalankan inference service**:
+2. **Run the inference service**:
 
    ```bash
    uvicorn inference_service.main:app --reload --host 0.0.0.0 --port 8000
    ```
 
-3. **Index contoh dokumen**:
+3. **Index a sample document**:
 
    ```bash
    curl -X POST "http://localhost:8000/index" ^
@@ -44,7 +42,7 @@ Project ini contoh kecil yang relevan dengan role **ML Engineer @ TwelveLabs**:
      -d "{\"id\":\"doc1\",\"text\":\"twelve labs video retrieval infra\",\"metadata\":{\"source\":\"demo\"}}"
    ```
 
-4. **Search**:
+4. **Run a search query**:
 
    ```bash
    curl -X POST "http://localhost:8000/search" ^
@@ -54,20 +52,20 @@ Project ini contoh kecil yang relevan dengan role **ML Engineer @ TwelveLabs**:
 
 ### Go client
 
-- Lihat `go-client/main.go` untuk contoh:
+- See `go-client/main.go` for an example:
   - Build: `go build -o search-client ./go-client`
-  - Pakai: `./search-client "video understanding infrastructure"`
+  - Run: `./search-client "video understanding infrastructure"`
 
-### Hubungan dengan Triton & TensorRT
+### Relationship to Triton & TensorRT
 
-- Di file Python, embedding sekarang **masih simple hash-based vector** (biar ringan dan portable).
-- Di production, bagian embedding ini bisa diganti:
-  - Panggil **Triton Inference Server** (gRPC/HTTP) yang serve model **TensorRT** (mis. text/video encoder).  
-  - Endpoint Python hanya jadi thin wrapper: request → Triton → vector store (HNSW/FAISS/ScaNN).
-- Folder `triton_model_repo/` berisi catatan layout repo model yang cocok buat Triton (`config.pbtxt`, dll).
+- In the Python service, the embedding layer is currently a **simple hash‑based vectorizer** (lightweight and portable).
+- In a production setup, this part can be replaced by:
+  - Calling **Triton Inference Server** (gRPC/HTTP) that serves a **TensorRT** model (e.g. text/video encoder).  
+  - The Python endpoint becomes a thin wrapper: request → Triton → vector store (HNSW/FAISS/ScaNN).
+- The `triton_model_repo/` folder documents a compatible Triton model repository layout (`config.pbtxt`, etc.).
 
-Dengan setup ini, kamu punya **satu project kecil** yang nunjukin:
+Overall, this is a **small, self‑contained project** that demonstrates:
 
-- Paham **inference serving pattern**, health check, dan service boundary.
-- Paham konsep **vector search**.
-- Pake **Python** di sisi service dan **Go** di sisi client.
+- Understanding of **inference serving patterns**, health checks, and service boundaries.
+- Understanding of **vector search** concepts.
+- Use of both **Python** (service) and **Go** (client).
